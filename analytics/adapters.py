@@ -14,7 +14,6 @@ gemini_cli.model_routing.failure	❌ 丢失	路由逻辑通常在 Agent 内部�
 gemini_cli.token.usage	⚠️ 估算	API 返回通常带 usage，如果只有 messages，需用 Tiktoken 估算。	使用估算值
 '''
 
-# 尝试导入 tiktoken 进行 token 估算，如果不存在则用字符数粗略替代
 try:
     import tiktoken
 
