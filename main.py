@@ -44,10 +44,10 @@ def main():
         status_icon = "✅" if result.dataset_type != DatasetType.REJECTED else "❌"
         print(f"{status_icon} Processed {trace_id}: Score={result.score} Type={result.dataset_type.value}")
 
-    # 2. 生成 HTML 报告
+    # 生成 HTML 报告
     ReportGenerator.generate_html(results, "final_analysis_report.html")
 
-    # 3. 导出 SFT 数据集 (JSONL)
+    # 导出 SFT 数据集 (JSONL)
     sft_data = [r.openai_messages for r in results if r.dataset_type == DatasetType.SFT]
     print(f"\n📦 Extracted {len(sft_data)} SFT traces for fine-tuning.")
 
@@ -62,12 +62,6 @@ def main():
 
     print(f"Result: {result.dataset_type.value}")
     print(f"Score:  {result.score}")
-    # 分数计算：
-    # + 2行代码 * 0.5 = 1分
-    # + 交互区间(1轮) = 不加分 (假设区间是3-15)
-    # + 工具成功率 100% = 30分
-    # 总分约 31分
-
     print(f"Metrics (Inferred): {result.metadata}")  # 你可以在 _analyze 里把 trace.metrics 塞进 metadata 查看
 
 

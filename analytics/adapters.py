@@ -4,14 +4,14 @@ from typing import List, Dict, Any
 from .schemas import TraceData
 
 '''
-仅凭 Trajectories, 我们彻底丢失了以下系统级维度，分析时必须忽略或设置为默认值：
-OTel 指标名	状态	原因	处理策略
-gemini_cli.exit.fail.count	❌ 丢失	无法知道进程是否崩溃，只能看到对话在哪里结束。	默认为 0
-gemini_cli.chat.invalid_chunk	❌ 丢失	传输层的错误在最终 JSON 中不可见。	默认为 0
-gemini_cli.memory.usage / cpu	❌ 丢失	无系统资源数据。	忽略
-gemini_cli.tool.call.latency	⚠️ 估算/丢失	除非 JSON 带时间戳，否则无法计算耗时。	默认为 0
-gemini_cli.model_routing.failure	❌ 丢失	路由逻辑通常在 Agent 内部，外部不可见。	忽略
-gemini_cli.token.usage	⚠️ 估算	API 返回通常带 usage，如果只有 messages，需用 Tiktoken 估算。	使用估算值
+仅凭 Trajectories, 我们会丢失了以下系统级维度，分析时必须忽略或设置为默认值：
+OTel                    指标名	    状态&原因	                                                处理策略
+exit.fail.count	        ❌ 丢失	    无法知道进程是否崩溃，只能看到对话在哪里结束。	                默认为 0
+chat.invalid_chunk	    ❌ 丢失	    传输层的错误在最终 JSON 中不可见。	                        默认为 0
+memory.usage / cpu	    ❌ 丢失	    无系统资源数据。	                                        忽略
+tool.call.latency	    ⚠️ 估算/丢失	除非 JSON 带时间戳，否则无法计算耗时。      	                默认为 0
+model_routing.failure	❌ 丢失	    路由逻辑通常在 Agent 内部，外部不可见。	                    忽略
+token.usage	            ⚠️ 估算	    API 返回通常带 usage，如果只有 messages，需用 Tiktoken 估算。	使用估算值
 '''
 
 try:

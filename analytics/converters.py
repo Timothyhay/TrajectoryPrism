@@ -89,7 +89,6 @@ class ReportGenerator:
 
         df = pd.DataFrame(data).sort_values(by="Score", ascending=False)
 
-        # 简单的 HTML 样式
         pd.set_option('display.max_colwidth', None)
         html = df.to_html(escape=False, formatters={
             'Full Trace': lambda

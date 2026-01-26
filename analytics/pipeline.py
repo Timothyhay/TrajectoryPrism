@@ -16,7 +16,7 @@ class TracePipeline:
         return self._analyze(trace)
 
     def process_openai_trace(self, trace_id: str, messages: List[Dict]) -> AnalysisResult:
-        """入口 2: 处理来自 OpenAI JSONL 的文本数据"""
+        """入口 2: 处理来自 OpenAI JSONL 的轨迹文本数据"""
         # 使用 Adapter 将文本逆向解析为标准 TraceData
         trace = OpenAIAdapter.to_trace_data(trace_id, messages)
         return self._analyze(trace)
@@ -26,9 +26,7 @@ class TracePipeline:
         核心分析逻辑：过滤 -> 打分 -> 分类 -> 格式化
         """
 
-        # -------------------------------------------------------
-        # 1. 硬性过滤 (Hard Filters)
-        # -------------------------------------------------------
+        # 硬性过滤
         reasons = []
         for filter_instance in ACTIVE_FILTERS:
             # check 方法返回 None 表示通过，返回 string 表示拒绝原因
@@ -47,17 +45,13 @@ class TracePipeline:
                 metadata=trace.metrics
             )
 
-        # -------------------------------------------------------
-        # 2. 质量打分 (Scoring)
-        # -------------------------------------------------------
+        # 质量打分
         # Scorer 内部会处理缺失指标的情况（默认为0）
         score = self.scorer.evaluate(trace)
 
-        # -------------------------------------------------------
-        # 3. 数据集分类 (Classification: SFT vs RLHF)
-        # -------------------------------------------------------
+        # 数据集分类 (Classification: SFT, RLHF)
         # 检查是否发生过需要修正的错误
-        # 注意：OpenAIAdapter 会尝试从文本中推断这些计数，如果无法推断则为 0
+        # OpenAIAdapter 会尝试从文本中推断这些计数，如果无法推断则为 0
         recovery_cnt = trace.metrics.get('gemini_cli.agent.recovery_attempt.count', 0)
         retry_cnt = trace.metrics.get('gemini_cli.chat.content_retry.count', 0)
 
@@ -70,16 +64,11 @@ class TracePipeline:
             # 没有任何错误修正记录，是一条完美轨迹，适合 SFT
             dataset_type = DatasetType.SFT
 
-        # -------------------------------------------------------
-        # 4. 格式转换 (Standardization)
-        # -------------------------------------------------------
-        # 将内部 Event 结构转回标准的 OpenAI 训练格式。
+
+        # 将内部 Event 结构转回标准的 OpenAI 格式
         # 即使输入就是 OpenAI 格式，这一步也能起到清洗和标准化的作用（如统一 System Prompt）。
         openai_msgs = OpenAIConverter.convert(trace)
 
-        # -------------------------------------------------------
-        # 5. 构建最终结果
-        # -------------------------------------------------------
         return AnalysisResult(
             trace_id=trace.trace_id,
             score=score,
