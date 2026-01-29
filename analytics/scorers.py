@@ -29,7 +29,7 @@ class QualityScorer:
         lines = metrics.get('gemini_cli.lines.changed', 0)
         score += min(lines * self.weights['code_output'], self.weights['code_cap'])
 
-        # 2. 推理密度分
+        # 2. 推理深度分
         density = self._calculate_thought_density(trace.events)
         score += density * self.weights['reasoning']
 
