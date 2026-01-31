@@ -1,9 +1,30 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from .schemas import TraceData
+import tiktoken
 
+# 使用通用的 cl100k_base (GPT-4/3.5/Gemini 通用近似)
+_TOKEN_ENCODING = tiktoken.get_encoding("cl100k_base")
+HAS_TIKTOKEN = True
+# True:  如果缺少必要的打点字段，直接忽略该过滤器（让轨迹通过）。
+# False: 如果缺少必要的打点字段，视为不合规，拒绝该轨迹（严格模式）。
+IGNORE_MISSING_FIELDS = True
 
 class BaseFilter(ABC):
+    def handle_missing_data(self, field_name: str) -> Optional[str]:
+        """
+        统一处理数据缺失的逻辑
+        :param field_name: 缺失的字段名，用于记录日志
+        :return: None 表示忽略/通过，String 表示拒绝原因
+        """
+        if IGNORE_MISSING_FIELDS:
+            # 宽容模式：缺失数据不作为拒绝理由，跳过此过滤器
+            # print(f"WARNING: Missing field {field_name}")
+            return None
+        else:
+            # 严格模式：缺失数据直接拒绝
+            return f"MISSING_REQUIRED_FIELD: {field_name}"
+
     @abstractmethod
     def check(self, trace: TraceData) -> Optional[str]:
         """返回 None 表示通过，返回字符串表示拒绝原因"""
@@ -25,6 +46,9 @@ class ProductivityFilter(BaseFilter):
     """检查是否有有效产出"""
 
     def check(self, trace: TraceData) -> Optional[str]:
+        if 'gemini_cli.file.operation.count' not in trace.metrics:
+            return self.handle_missing_data("metric: file.operation.count")
+
         file_ops = trace.metrics.get('gemini_cli.file.operation.count', 0)
         lines_changed = trace.metrics.get('gemini_cli.lines.changed', 0)
 
@@ -51,26 +75,34 @@ class PromptRichnessFilter(BaseFilter):
     """
 
     def check(self, trace: TraceData) -> Optional[str]:
-        # 寻找第一个用户 Prompt 事件
+        # 寻找 User Prompt 事件
         user_prompt_event = next(
             (e for e in trace.events if e['name'] == 'gemini_cli.user_prompt'),
             None
         )
 
-        # 如果连 Prompt 事件都没有，视为数据缺失
+        # 连 prompt 事件都没打点
         if not user_prompt_event:
-            return "MISSING_USER_PROMPT"
+            return self.handle_missing_data("event: gemini_cli.user_prompt")
 
-        # 获取长度 (兼容 OTel 字段和 Adapter 生成的字段)
-        length = user_prompt_event['attributes'].get('prompt_length', 0)
+        attrs = user_prompt_event.get('attributes', {})
 
-        # 阈值设定：少于 10 个字符通常无法构成一个复杂的 Agent 任务
-        # 例如 "fix bug" (7 chars) -> Reject
-        # "Fix the login bug in auth.py" (28 chars) -> Pass
+        # 有事件，但没有 prompt_length 属性 (旧数据或未计算)
+        if 'prompt_length' not in attrs:
+            # 如果有 'prompt' 文本，现场算一个
+            if 'prompt' in attrs and isinstance(attrs['prompt'], str):
+                length = len(_TOKEN_ENCODING.encode(attrs['prompt']))
+            else:
+                return self.handle_missing_data("attribute: prompt_length")
+        else:
+            length = attrs['prompt_length']
+
+        # 2. 只有在数据存在的情况下，才执行真正的业务逻辑校验
         if length < 10:
             return f"PROMPT_TOO_SHORT (len={length})"
 
         return None
+
 
 # 注册所有活跃的过滤器
 ACTIVE_FILTERS = [
