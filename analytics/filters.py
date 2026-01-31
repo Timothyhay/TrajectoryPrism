@@ -44,9 +44,38 @@ class ContextTruncationFilter(BaseFilter):
         return None
 
 
+class PromptRichnessFilter(BaseFilter):
+    """
+    [26/01/31 新增] 提示词丰富度过滤
+    规则：剔除 prompt_length 过短的轨迹，这些通常是无效的测试或寒暄。
+    """
+
+    def check(self, trace: TraceData) -> Optional[str]:
+        # 寻找第一个用户 Prompt 事件
+        user_prompt_event = next(
+            (e for e in trace.events if e['name'] == 'gemini_cli.user_prompt'),
+            None
+        )
+
+        # 如果连 Prompt 事件都没有，视为数据缺失
+        if not user_prompt_event:
+            return "MISSING_USER_PROMPT"
+
+        # 获取长度 (兼容 OTel 字段和 Adapter 生成的字段)
+        length = user_prompt_event['attributes'].get('prompt_length', 0)
+
+        # 阈值设定：少于 10 个字符通常无法构成一个复杂的 Agent 任务
+        # 例如 "fix bug" (7 chars) -> Reject
+        # "Fix the login bug in auth.py" (28 chars) -> Pass
+        if length < 10:
+            return f"PROMPT_TOO_SHORT (len={length})"
+
+        return None
+
 # 注册所有活跃的过滤器
 ACTIVE_FILTERS = [
     IntegrityFilter(),
     ProductivityFilter(),
-    ContextTruncationFilter()
+    ContextTruncationFilter(),
+    PromptRichnessFilter()
 ]
