@@ -1,68 +1,43 @@
 from analytics.pipeline import TracePipeline
-from analytics.converters import ReportGenerator
 from analytics.utils import get_mock_data
-from analytics.schemas import DatasetType
-
-
-mock_openai_data = [
-    {
-        "role": "user",
-        "content": "Create a hello world python script."
-    },
-    {
-        "role": "assistant",
-        "tool_calls": [{
-            "id": "call_123",
-            "function": {
-                "name": "write_file",
-                "arguments": "{\"filename\": \"hello.py\", \"content\": \"print('hello')\\nprint('world')\"}"
-            }
-        }]
-    },
-    {
-        "role": "tool",
-        "tool_call_id": "call_123",
-        "content": "File created successfully."
-    }
-]
-
 
 
 def main():
-    pipeline = TracePipeline()
-    results = []
+    # 场景 A: 分析普通代码生成任务
+    print("\n=== Running General Coding Scenario ===")
+    pipeline_coding = TracePipeline(scenario_name="default")
 
-    print("🚀 Starting Analysis Pipeline...")
+    # 场景 B: 分析 SWE-bench 任务
+    print("\n=== Running SWE-bench Scenario ===")
+    pipeline_swe = TracePipeline(scenario_name="swe_bench")
 
-    print("--- 1. Analyzing OTel Data ---")
+    # 模拟数据
+    mock_swe_trace = {
+        "metrics": {
+            "gemini_cli.lines.changed": 1,  # 只改了1行 (对 default 场景分很低，对 swe 场景分还可以)
+            "gemini_cli.agent.turns": 25,  # 跑了25轮 (对 default 场景会扣烂分，对 swe 场景可容忍)
+            "gemini_cli.exit.fail.count": 0,
+            "gemini_cli.file.operation.count": 1
+        },
+        "events": [
+            {"name": "gemini_cli.user_prompt",
+             "attributes": {"prompt": "Fix complex race condition", "prompt_length": 50}},
+            {"name": "gemini_cli.api_response",
+             "attributes": {"response_text": "Thinking...", "thoughts_token_count": 500, "output_token_count": 600}},
+            # 深度思考
+            {"name": "gemini_cli.tool_call", "attributes": {"function_name": "patch", "success": True}}
+        ]
+    }
 
-    # 1. 模拟遍历数据源
-    for trace_id, metrics, events in get_mock_data():
-        result = pipeline.process_trace(trace_id, metrics, events)
-        results.append(result)
+    # 1. 用通用标准跑
+    res1 = pipeline_coding.process_trace("swe_task_001", mock_swe_trace['metrics'], mock_swe_trace['events'])
+    print(f"[General] Score: {res1.score} (Status: {res1.reasons or 'Pass'})")
+    # 预期：分数较低，因为 turns 太高被惩罚，lines 太少分不高
 
-        status_icon = "✅" if result.dataset_type != DatasetType.REJECTED else "❌"
-        print(f"{status_icon} Processed {trace_id}: Score={result.score} Type={result.dataset_type.value}")
-
-    # 生成 HTML 报告
-    ReportGenerator.generate_html(results, "final_analysis_report.html")
-
-    # 导出 SFT 数据集 (JSONL)
-    sft_data = [r.openai_messages for r in results if r.dataset_type == DatasetType.SFT]
-    print(f"\n📦 Extracted {len(sft_data)} SFT traces for fine-tuning.")
-
-    print("\n--- 2. Analyzing Raw OpenAI Traj Data ---")
-    # 适配器会自动：
-    # 1. 发现 write_file 工具
-    # 2. 解析 content 参数，计算出 lines.changed = 2
-    # 3. 统计 turns = 1
-    # 4. 检测 tool output 没有 "error"，标记 success = True
-
-    result = pipeline.process_openai_trace("raw_trace_001", mock_openai_data)
-
-    print(f"Result: {result.dataset_type.value}")
-    print(f"Score:  {result.score}")
-    print(f"Metrics (Inferred): {result.metadata}")  # 你可以在 _analyze 里把 trace.metrics 塞进 metadata 查看
+    # 2. 用 SWE-bench 标准跑
+    res2 = pipeline_swe.process_trace("swe_task_001", mock_swe_trace['metrics'], mock_swe_trace['events'])
+    print(f"[SWE-Bench] Score: {res2.score} (Status: {res2.reasons or 'Pass'})")
+    # 预期：分数较高，因为 turns 惩罚很轻，Reasoning 权重很高，且没有被 ProductivityFilter 拦截
 
 
 if __name__ == "__main__":
