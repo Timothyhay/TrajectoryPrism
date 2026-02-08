@@ -29,7 +29,7 @@ class ScenarioConfig:
 
 
 # =========================================================================
-# 场景 1: 通用编码助手 (Default)
+# 场景 1: 通用 Agent，允许调用各种工具，也可以用作编码助手 (Default)
 # 特点：均衡，奖励写代码，奖励效率
 # =========================================================================
 SCENARIO_GENERAL_CODING = ScenarioConfig(
@@ -59,9 +59,7 @@ SCENARIO_SWE_BENCH = ScenarioConfig(
     description="Repository level bug fixing. Tolerates long turns and small diffs.",
     filters=[
         IntegrityFilter(),
-        # ProductivityFilter(), # <--- [禁用] SWE-bench 有时只读不写(分析任务)或只改1个字符，不强求 lines > 0
         ContextTruncationFilter(),
-        PromptRichnessFilter()
     ],
     scorers=[
         # [调整] 代码行数权重极大降低，只要有一点产出就给满分(因为可能是改一行配置)
